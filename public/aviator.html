@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>B10 Aviator</title>
+<style>
+body{margin:0;background:#10151e;color:white;font-family:Arial;text-align:center}
+header{background:#192536;padding:18px;color:#27e0a0;font-size:24px;font-weight:bold}
+.box{margin:20px 12px;background:#192536;padding:20px;border-radius:15px}
+#screen{height:190px;background:linear-gradient(#182c48,#10151e);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-direction:column}
+#plane{font-size:55px}
+#multiplier{font-size:38px;color:#27e0a0;font-weight:bold}
+input{padding:13px;width:80%;border-radius:8px;border:0;margin:15px}
+button{padding:15px 25px;border:0;border-radius:9px;background:#27e0a0;font-weight:bold;margin:8px}
+#cash{background:#ffb52e}
+</style>
+</head>
+<body>
+<header>B10 AVIATOR ✈️</header>
+<div class="box">
+<p>Demo Balance: <b id="balance">10000</b> 🪙</p>
+<div id="screen">
+<div id="plane">✈️</div>
+<div id="multiplier">1.00x</div>
+<p id="message">Ready to Play</p>
+</div>
+<input id="bet" type="number" value="100" min="1" placeholder="Bet coins">
+<br>
+<button id="start" onclick="startGame()">START</button>
+<button id="cash" onclick="cashOut()" disabled>CASH OUT</button>
+<p id="result"></p>
+</div>
+<script>
+let balance=Number(localStorage.b10balance||10000);
+let active=false,cashed=false,mult=1,crash=0,timer=null,bet=0;
+const $=id=>document.getElementById(id);
+function update(){
+$("balance").innerText=balance;
+localStorage.b10balance=balance;
+}
+update();
+
+function startGame(){
+if(active)return;
+bet=Number($("bet").value);
+if(!Number.isFinite(bet)||bet<1||bet>balance){
+alert("Invalid bet or insufficient demo coins");
+return;
+}
+balance-=bet;update();
+active=true;cashed=false;mult=1;
+crash=1.2+Math.random()*3.8;
+$("start").disabled=true;
+$("cash").disabled=false;
+$("result").innerText="";
+$("message").innerText="Plane is flying!";
+$("plane").style.transform="translateY(0)";
+timer=setInterval(()=>{
+mult+=0.01+mult*0.008;
+$("multiplier").innerText=mult.toFixed(2)+"x";
+$("plane").style.transform="translateY(-"+Math.min(100,mult*15)+"px)";
+if(mult>=crash)endGame();
+},100);
+}
+function cashOut(){
+if(!active||cashed)return;
+cashed=true;
+balance+=Math.floor(bet*mult);
+update();
+$("result").innerText="Cashed out at "+mult.toFixed(2)+"x";
+endGame();
+}
+function endGame(){
+clearInterval(timer);
+active=false;
+$("start").disabled=false;
+$("cash").disabled=true;
+if(!cashed){
+$("message").innerText="CRASHED!";
+$("result").innerText="You lost "+bet+" demo coins";
+}else{
+$("message").innerText="CASHED OUT!";
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,591 @@
+
+
+
+cd ~/b10-game
+cat > public/index.html <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>B10 GAME</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080e19;color:#fff;font-family:Arial,sans-serif;padding-bottom:75px}
+header{height:65px;background:#111c2d;display:flex;align-items:center;justify-content:space-between;padding:0 15px;border-bottom:1px solid #26374d;position:sticky;top:0;z-index:5}
+.logo{font-size:25px;font-weight:900;color:#26e0a1}
+.wallet{background:#203149;padding:10px 13px;border-radius:9px;color:#ffd45c;font-weight:bold}
+main{max-width:700px;margin:auto;padding:13px}
+.banner{background:linear-gradient(120deg,#075b4c,#172c55);padding:22px;border-radius:15px;margin:10px 0 20px}
+.banner h2{margin:0 0 8px;font-size:26px}
+.banner p{color:#d0e9e2}
+.section-title{font-size:19px;font-weight:bold;margin:22px 0 13px}
+.games{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.game-card{background:#142238;border:1px solid #263b56;border-radius:13px;padding:17px 10px;text-align:center}
+.emoji{font-size:43px;margin-bottom:9px}
+.game-card b{font-size:15px}
+.play{width:100%;padding:11px;margin-top:13px;background:#19d69a;border:0;border-radius:8px;font-weight:bold;color:#052016}
+.panel{display:none;background:#111e31;border:1px solid #2a3e59;border-radius:15px;padding:16px;margin-top:12px}
+.panel.active{display:block}
+.back{background:#293c55;color:white;border:0;padding:10px 14px;border-radius:8px;margin-bottom:15px}
+.game-title{text-align:center;color:#30e3a8;font-size:24px;margin:5px}
+.sub{text-align:center;color:#9eafc4;font-size:13px;margin:10px}
+.game-screen{background:#091522;border-radius:13px;padding:20px;text-align:center;margin:15px 0}
+.big{font-size:39px;font-weight:bold;color:#35e5aa;margin:10px}
+input{background:#091522;color:white;border:1px solid #40536d;padding:13px;border-radius:8px;width:100%;margin:8px 0}
+.btn{background:#20d59b;color:#052016;border:0;padding:13px 17px;border-radius:8px;font-weight:bold;margin:5px;cursor:pointer}
+.btn2{background:#293e5b;color:white;border:0;padding:12px;border-radius:8px;margin:5px}
+.btn:disabled{opacity:.4}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:15px 0}
+.tile{aspect-ratio:1;background:#263e5c;border:0;border-radius:8px;color:white;font-size:25px}
+.tile.safe{background:#0c8b65}
+.tile.bomb{background:#b83248}
+.choices{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;margin:15px 0}
+.choice{background:#263b57;color:white;border:1px solid #526985;padding:13px;border-radius:9px;min-width:75px}
+.choice.selected{background:#138b68;border-color:#36edb4}
+.history{font-size:13px;color:#9eb0c7;line-height:1.8}
+nav{position:fixed;bottom:0;left:0;width:100%;background:#111c2d;border-top:1px solid #293b53;display:flex;justify-content:space-around;padding:14px 4px;z-index:5}
+nav button{background:none;border:0;color:#bdcadd;font-size:12px}
+footer{text-align:center;color:#71839b;font-size:11px;padding:18px}
+</style>
+</head>
+<body>
+
+<header>
+<div class="logo">B10 GAME</div>
+<div class="wallet">🪙 <span id="balance">10000</span></div>
+</header>
+
+<main>
+<div id="home">
+<div class="banner">
+<h2>WELCOME TO B10 GAME</h2>
+<p>Play your favourite games in one place.</p>
+<strong>🎁 10,000 FREE DEMO COINS</strong>
+</div>
+
+<div class="section-title">🎮 ALL GAMES</div>
+<div class="games" id="games"></div>
+<div class="section-title">📜 Recent Activity</div>
+<div class="game-screen history" id="history">No games played yet.</div>
+</div>
+
+<div class="panel" id="panel">
+<button class="back" onclick="goHome()">← BACK TO GAMES</button>
+<h2 class="game-title" id="gameTitle"></h2>
+<div class="sub">B10 GAME · DEMO MODE</div>
+<div id="gameContent"></div>
+</div>
+</main>
+
+<nav>
+<button onclick="goHome()">🏠<br>HOME</button>
+<button onclick="goHome()">🎮<br>GAMES</button>
+<button onclick="walletInfo()">👛<br>WALLET</button>
+<button onclick="profileInfo()">👤<br>PROFILE</button>
+</nav>
+
+<footer>B10 GAME · Virtual demo coins only · No real-money transactions</footer>
+
+<script>
+let balance=Number(localStorage.getItem("b10balance")||10000);
+let current="";
+let activity=[];
+let aviTimer=null;
+let avi={active:false,mult:1,bet:0,crash:0,cashed:false};
+let mines={active:false,bet:0,bombs:[],opened:[],safe:0};
+let selectedColor="Red";
+let selectedDirection="Up";
+let selectedDragon="Dragon";
+let selectedSlot="";
+
+const $=id=>document.getElementById(id);
+
+const games=[
+["✈️","Aviator"],["💣","Mines"],
+["🎲","7 Up 7 Down"],["🎨","Color Game"],
+["🐉","Dragon Tiger"],["🎰","Slots"],
+["🃏","Card Games"],["🏴‍☠️","Pirate Flip"]
+];
+
+function update(){
+$("balance").innerText=balance.toLocaleString();
+localStorage.setItem("b10balance",balance);
+}
+
+function log(msg){
+activity.unshift(msg);
+activity=activity.slice(0,8);
+$("history").innerHTML=activity.join("<br>");
+}
+
+function spend(amount){
+if(!Number.isFinite(amount)||amount<1||amount>balance){
+alert("Invalid bet or insufficient demo coins!");
+return false;
+}
+balance-=amount;
+update();
+return true;
+}
+
+function reward(amount){
+balance+=Math.floor(amount);
+update();
+}
+
+function goHome(){
+clearInterval(aviTimer);
+avi.active=false;
+$("panel").classList.remove("active");
+$("home").style.display="block";
+current="";
+}
+
+function openGame(name){
+clearInterval(aviTimer);
+avi.active=false;
+mines.active=false;
+current=name;
+$("home").style.display="none";
+$("panel").classList.add("active");
+$("gameTitle").innerText=name;
+renderGame(name);
+window.scrollTo(0,0);
+}
+
+function renderGame(name){
+let html="";
+if(name==="Aviator")html=aviatorHTML();
+if(name==="Mines")html=minesHTML();
+if(name==="7 Up 7 Down")html=diceHTML();
+if(name==="Color Game")html=colorHTML();
+if(name==="Dragon Tiger")html=dragonHTML();
+if(name==="Slots")html=slotsHTML();
+if(name==="Card Games")html=cardsHTML();
+if(name==="Pirate Flip")html=pirateHTML();
+$("gameContent").innerHTML=html;
+if(name==="Aviator") startAviLoop();
+}
+
+games.forEach(g=>{
+let d=document.createElement("div");
+d.className="game-card";
+d.innerHTML=`<div class="emoji">${g[0]}</div><b>${g[1]}</b><button class="play">PLAY DEMO</button>`;
+d.querySelector("button").onclick=()=>openGame(g[1]);
+$("games").appendChild(d);
+});
+
+function betInput(value=100){
+return `<label>Bet amount (Demo Coins)</label><input id="bet" type="number" min="1" value="${value}">`;
+}
+function getBet(){
+return Number($("bet").value);
+}
+
+
+/* AVIATOR - AUTOMATIC DEMO ROUNDS */
+
+function aviatorHTML(){
+return `
+<div class="game-screen">
+  <div style="font-size:65px" id="plane" style="font-size:90px;display:inline-block">✈️</div>
+  <div class="big" id="mult">1.00x</div>
+  <h3 id="aviCountdown">NEXT ROUND: 12</h3>
+  <p id="aviMsg">Place your demo bet!</p>
+  <p id="aviStatus">WAITING FOR PLAYERS</p>
+</div>
+
+<label>Bet amount (Demo Coins)</label>
+<input id="aviBet" type="number" min="1" value="100">
+
+<button class="btn" id="aviPlace" onclick="placeAviBet()">PLACE BET</button>
+<button class="btn2" id="aviCash" onclick="cashAvi()" disabled>CASH OUT</button>
+
+<p class="sub">12-second betting window · Automatic rounds · Demo mode</p>
+`;
+}
+
+function startAviLoop(){
+  clearInterval(aviTimer);
+
+  avi = {
+    phase:"waiting",
+    bet:0,
+    queued:false,
+    cashed:false,
+    mult:1,
+    crash:0,
+    waitUntil:Date.now()+12000,
+    started:0,
+    nextAt:0
+  };
+
+  aviTimer=setInterval(aviTick,100);
+  updateAviUI();
+}
+
+function updateAviUI(){
+  if(!$("aviStatus")) return;
+
+  $("aviPlace").disabled =
+    avi.phase!=="waiting" || avi.queued;
+
+  $("aviCash").disabled =
+    avi.phase!=="flying" || !avi.queued || avi.cashed;
+
+  if(avi.phase==="waiting"){
+    $("aviStatus").innerText="WAITING FOR PLAYERS";
+    $("aviCountdown").innerText=
+      "BETTING CLOSES: "+Math.max(0,Math.ceil((avi.waitUntil-Date.now())/1000));
+    $("aviMsg").innerText=avi.queued
+      ? "Your bet is ready for next round!"
+      : "Place your demo bet!";
+  }
+}
+
+function placeAviBet(){
+  if(avi.phase!=="waiting" || avi.queued)return;
+
+  let b=Number($("aviBet").value);
+  if(!spend(b))return;
+
+  avi.bet=b;
+  avi.queued=true;
+
+  $("aviMsg").innerText="Bet placed: "+b+" coins";
+  updateAviUI();
+  log("Aviator: bet placed "+b+" coins");
+}
+
+function cancelAviBet(){
+  if(avi.phase!=="waiting" || !avi.queued)return;
+
+  reward(avi.bet);
+  avi.bet=0;
+  avi.queued=false;
+
+  $("aviMsg").innerText="Bet cancelled";
+  updateAviUI();
+}
+
+function aviTick(){
+  if(!$("aviStatus"))return;
+
+  const now=Date.now();
+
+  if(avi.phase==="waiting"){
+    let remaining=Math.ceil((avi.waitUntil-now)/1000);
+
+    $("aviCountdown").innerText="BETTING CLOSES: "+Math.max(0,remaining);
+
+    if(now>=avi.waitUntil){
+      avi.phase="flying";
+      avi.started=now;
+      avi.mult=1;
+      avi.crash=1.15+Math.random()*4.85;
+
+      $("aviStatus").innerText="✈️ FLYING";
+      $("aviCountdown").innerText="ROUND STARTED";
+      $("aviMsg").innerText="Plane is flying!";
+      updateAviUI();
+    }
+  }
+
+  else if(avi.phase==="flying"){
+    let elapsed=(now-avi.started)/1000;
+
+    avi.mult=Math.exp(elapsed*0.085);
+    $("mult").innerText=avi.mult.toFixed(2)+"x";
+    $("aviCountdown").innerText="ROUND IN PROGRESS";
+    $("plane").style.transform=
+      `translate(${Math.min(100,elapsed*5)}px,-${Math.min(100,elapsed*4)}px)`;
+
+    if(avi.mult>=avi.crash){
+      endAvi();
+    }else{
+      $("aviStatus").innerText="🚀 MULTIPLIER RISING";
+      $("aviCash").innerText="CASH OUT "+avi.mult.toFixed(2)+"x";
+    }
+  }
+
+  else if(avi.phase==="crashed" && now>=avi.nextAt){
+    avi.phase="waiting";
+    avi.bet=0;
+    avi.queued=false;
+    avi.cashed=false;
+    avi.mult=1;
+    avi.crash=0;
+    avi.waitUntil=now+12000;
+
+    $("mult").innerText="1.00x";
+    $("plane").innerText="✈️";
+    $("plane").style.fontSize="90px";
+    $("plane").style.transform="none";
+    $("aviStatus").innerText="WAITING FOR PLAYERS";
+    $("aviMsg").innerText="New round! Place your bet.";
+    $("aviCash").innerText="CASH OUT";
+    updateAviUI();
+  }
+}
+
+function cashAvi(){
+  if(avi.phase!=="flying" || !avi.queued || avi.cashed)return;
+
+  let win=avi.bet*avi.mult;
+  avi.cashed=true;
+  avi.queued=false;
+
+  reward(win);
+  log("Aviator: won "+Math.floor(win)+" coins");
+
+  $("aviMsg").innerText="CASHED OUT! +"+Math.floor(win)+" coins";
+  $("aviCash").disabled=true;
+  $("aviStatus").innerText="BET SECURED";
+}
+
+function endAvi(){
+  avi.phase="crashed";
+
+  $("mult").innerText=avi.crash.toFixed(2)+"x";
+  $("plane").innerText="💥";
+  $("plane").style.fontSize="90px";
+  $("aviStatus").innerText="CRASHED!";
+  $("aviCountdown").innerText="ROUND FINISHED";
+
+  if(avi.queued && !avi.cashed){
+    log("Aviator: lost "+avi.bet+" coins");
+    $("aviMsg").innerText="Plane crashed! Bet lost.";
+  }else{
+    $("aviMsg").innerText="Round crashed! Next round soon.";
+  }
+
+  avi.bet=0;
+  avi.queued=false;
+  $("aviPlace").disabled=true;
+  $("aviCash").disabled=true;
+
+  avi.nextAt=Date.now()+3000;
+}
+
+
+/* MINES */
+function minesHTML(){
+return `<div class="game-screen">
+<div class="big" id="mineMult">1.00x</div>
+<div id="mineMsg">Choose your bet and start.</div>
+</div>
+${betInput()}
+<label>Number of bombs</label>
+<select id="bombCount" style="width:100%;padding:12px;background:#091522;color:white;border-radius:8px">
+<option value="3">3 Bombs</option><option value="5">5 Bombs</option>
+<option value="7">7 Bombs</option><option value="10">10 Bombs</option>
+</select>
+<button class="btn" id="mineStart" onclick="startMines()">START MINES</button>
+<div class="grid" id="mineGrid"></div>
+<button class="btn" id="mineCash" onclick="cashMines()" disabled>CASH OUT</button>`;
+}
+function startMines(){
+let b=getBet();
+if(!spend(b))return;
+let count=Number($("bombCount").value);
+mines={active:true,bet:b,bombs:[],opened:[],safe:0};
+while(mines.bombs.length<count){
+let n=Math.floor(Math.random()*25);
+if(!mines.bombs.includes(n))mines.bombs.push(n);
+}
+$("mineGrid").innerHTML="";
+for(let i=0;i<25;i++){
+let btn=document.createElement("button");
+btn.className="tile";btn.innerText="?";
+btn.onclick=()=>pickMine(i,btn);
+$("mineGrid").appendChild(btn);
+}
+$("mineStart").disabled=true;
+$("mineCash").disabled=false;
+$("mineMsg").innerText="Find safe tiles!";
+$("mineMult").innerText="1.00x";
+}
+function pickMine(i,btn){
+if(!mines.active||mines.opened.includes(i))return;
+mines.opened.push(i);
+if(mines.bombs.includes(i)){
+btn.innerText="💣";btn.classList.add("bomb");
+mines.bombs.forEach(n=>{
+let t=$("mineGrid").children[n];
+t.innerText="💣";t.classList.add("bomb");
+});
+mines.active=false;
+$("mineMsg").innerText="BOOM! You lost.";
+$("mineCash").disabled=true;
+$("mineStart").disabled=false;
+log("Mines: lost "+mines.bet+" coins");
+return;
+}
+mines.safe++;
+btn.innerText="💎";btn.classList.add("safe");
+let mult=Math.pow(1.15,mines.safe);
+$("mineMult").innerText=mult.toFixed(2)+"x";
+}
+function cashMines(){
+if(!mines.active||mines.safe===0)return;
+let win=mines.bet*Math.pow(1.15,mines.safe);
+reward(win);
+mines.active=false;
+$("mineMsg").innerText="CASHED OUT! +"+Math.floor(win)+" coins";
+$("mineCash").disabled=true;
+$("mineStart").disabled=false;
+log("Mines: +"+Math.floor(win)+" coins");
+}
+
+/* DICE */
+function diceHTML(){
+return `<div class="game-screen"><div class="big" id="diceResult">🎲 🎲</div><p id="diceMsg">Choose a result</p></div>
+${betInput()}
+<div class="choices">
+<button class="choice" onclick="pickDice('Down',this)">DOWN (2-6)</button>
+<button class="choice" onclick="pickDice('Seven',this)">SEVEN</button>
+<button class="choice" onclick="pickDice('Up',this)">UP (8-12)</button>
+</div><button class="btn" onclick="playDice()">ROLL DICE</button>`;
+}
+function pickDice(v,el){
+selectedDirection=v;
+document.querySelectorAll(".choice").forEach(x=>x.classList.remove("selected"));
+el.classList.add("selected");
+}
+function playDice(){
+let b=getBet();if(!spend(b))return;
+let a=1+Math.floor(Math.random()*6),c=1+Math.floor(Math.random()*6),sum=a+c;
+let result=sum<7?"Down":sum>7?"Up":"Seven";
+let win=result===selectedDirection;
+$("diceResult").innerText=`🎲 ${a} + ${c} = ${sum}`;
+$("diceMsg").innerText=win?"YOU WIN!":"YOU LOSE!";
+if(win)reward(b*(result==="Seven"?4:2));
+log("Dice: "+result+(win?" won":" lost"));
+}
+
+/* COLOR */
+function colorHTML(){
+return `<div class="game-screen"><div class="big" id="colorResult">🎨</div><p id="colorMsg">Choose a color</p></div>
+${betInput()}
+<div class="choices">
+<button class="choice" onclick="pickColor('Red',this)">🔴 Red</button>
+<button class="choice" onclick="pickColor('Green',this)">🟢 Green</button>
+<button class="choice" onclick="pickColor('Violet',this)">🟣 Violet</button>
+</div><button class="btn" onclick="playColor()">PLAY COLOR</button>`;
+}
+function pickColor(c,el){
+selectedColor=c;
+document.querySelectorAll(".choice").forEach(x=>x.classList.remove("selected"));
+el.classList.add("selected");
+}
+function playColor(){
+let b=getBet();if(!spend(b))return;
+let result=["Red","Green","Violet"][Math.floor(Math.random()*3)];
+$("colorResult").innerText=result;
+let win=result===selectedColor;
+$("colorMsg").innerText=win?"YOU WIN!":"TRY AGAIN!";
+if(win)reward(b*(result==="Violet"?3:2));
+log("Color: "+result+(win?" won":" lost"));
+}
+
+/* DRAGON TIGER */
+function dragonHTML(){
+return `<div class="game-screen"><div class="big" id="dragonResult">🐉 VS 🐅</div><p id="dragonMsg">Choose Dragon or Tiger</p></div>
+${betInput()}
+<div class="choices">
+<button class="choice" onclick="pickDragon('Dragon',this)">🐉 Dragon</button>
+<button class="choice" onclick="pickDragon('Tiger',this)">🐅 Tiger</button>
+</div><button class="btn" onclick="playDragon()">DEAL CARDS</button>`;
+}
+function pickDragon(v,el){
+selectedDragon=v;
+document.querySelectorAll(".choice").forEach(x=>x.classList.remove("selected"));
+el.classList.add("selected");
+}
+function playDragon(){
+let b=getBet();if(!spend(b))return;
+let a=1+Math.floor(Math.random()*13),c=1+Math.floor(Math.random()*13);
+let result=a>c?"Dragon":c>a?"Tiger":"Tie";
+$("dragonResult").innerText=`🐉 ${a} : ${c} 🐅`;
+let win=result===selectedDragon;
+$("dragonMsg").innerText=result+" "+(win?"YOU WIN!":"");
+if(win)reward(b*2);
+else if(result==="Tie")reward(b);
+log("Dragon Tiger: "+result+(win?" won":""));
+}
+
+/* SLOTS */
+function slotsHTML(){
+return `<div class="game-screen"><div class="big" id="slotResult">🍒 🍋 🍇</div><p id="slotMsg">Try your luck!</p></div>
+${betInput()}
+<button class="btn" onclick="playSlots()">SPIN SLOTS</button>`;
+}
+function playSlots(){
+let b=getBet();if(!spend(b))return;
+let symbols=["🍒","🍋","🍇","🔔","💎","7️⃣"];
+let a=Array.from({length:3},()=>symbols[Math.floor(Math.random()*symbols.length)]);
+$("slotResult").innerText=a.join(" ");
+let win=0;
+if(a[0]===a[1]&&a[1]===a[2])win=b*5;
+else if(a[0]===a[1]||a[1]===a[2]||a[0]===a[2])win=b*2;
+if(win)reward(win);
+$("slotMsg").innerText=win?"WIN +"+win+" coins":"No win this time";
+log("Slots: "+(win?"won "+win:"lost "+b));
+}
+
+/* CARDS */
+function cardsHTML(){
+return `<div class="game-screen"><div class="big" id="cardResult">🂠 VS 🂠</div><p id="cardMsg">Your card vs computer</p></div>
+${betInput()}
+<button class="btn" onclick="playCards()">DRAW CARDS</button>`;
+}
+function playCards(){
+let b=getBet();if(!spend(b))return;
+let a=1+Math.floor(Math.random()*13),c=1+Math.floor(Math.random()*13);
+$("cardResult").innerText=a+"  VS  "+c;
+let win=a>c;
+$("cardMsg").innerText=a===c?"DRAW":win?"YOU WIN!":"COMPUTER WINS";
+if(win)reward(b*2);else if(a===c)reward(b);
+log("Cards: "+(win?"won":"round finished"));
+}
+
+/* PIRATE FLIP */
+function pirateHTML(){
+return `<div class="game-screen"><div class="big" id="pirateResult">🏴‍☠️</div><p id="pirateMsg">Choose a side</p></div>
+${betInput()}
+<div class="choices">
+<button class="choice" onclick="pickPirate('Heads',this)">HEADS</button>
+<button class="choice" onclick="pickPirate('Tails',this)">TAILS</button>
+</div><button class="btn" onclick="playPirate()">FLIP COIN</button>`;
+}
+let pirateChoice="Heads";
+function pickPirate(v,el){
+pirateChoice=v;
+document.querySelectorAll(".choice").forEach(x=>x.classList.remove("selected"));
+el.classList.add("selected");
+}
+function playPirate(){
+let b=getBet();if(!spend(b))return;
+let result=Math.random()<.5?"Heads":"Tails";
+$("pirateResult").innerText=result==="Heads"?"🪙":"🏴‍☠️";
+let win=result===pirateChoice;
+$("pirateMsg").innerText=result+" — "+(win?"YOU WIN!":"YOU LOSE!");
+if(win)reward(b*2);
+log("Pirate Flip: "+result+(win?" won":" lost"));
+}
+
+function walletInfo(){
+alert("Demo wallet balance: "+balance+" coins. Real-money deposits and withdrawals are not enabled.");
+}
+function profileInfo(){
+alert("B10 GAME Demo Player\nVirtual coins: "+balance);
+}
+
+update();
+</script>
+<script type="module" src="/firebase-auth.js"></script>
+<script src="/effects.js"></script>
+</body>
+</html>
+EOF
