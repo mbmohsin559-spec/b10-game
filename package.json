@@ -10,5 +10,8 @@
   "type": "commonjs",
   "dependencies": {
     "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.156.0"
   }
 }

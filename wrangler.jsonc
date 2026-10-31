@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tiny-rice-f684",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-31",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AVIATOR",
+        "class_name": "AviatorRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AviatorRoom"]
+    }
+  ]
+}
